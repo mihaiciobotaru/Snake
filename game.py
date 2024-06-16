@@ -1,4 +1,4 @@
-from geometry import Point, Direction
+from geometry import Point
 from snake import Snake
 import random
 
@@ -22,13 +22,15 @@ class Game:
     fruit = None
     grid_size = None
     has_eaten = False
+    circular_boundaries = False
     score = 0
 
-    def __init__(self, grid_size):
+    def __init__(self, grid_size, circular_boundaries = False):
         self.grid_size = grid_size
-        self.snake = Snake(Point(grid_size // 2, grid_size // 2))
+        self.snake = Snake(grid_size, 3, circular_boundaries)
         self.fruit = Fruit(self.snake.get_snake_body(), grid_size)
         self.has_eaten = False
+        self.circular_boundaries = circular_boundaries
 
     def update(self, should_move = False):
         self.score = len(self.snake.get_snake_body())
@@ -51,6 +53,8 @@ class Game:
         return self.fruit   
 
     def test_grid_boundaries(self):
+        if self.circular_boundaries:
+            return False
         head = self.snake.get_snake_body()[0]
         if head.x < 0 or head.x >= self.grid_size or head.y < 0 or head.y >= self.grid_size:
             return True

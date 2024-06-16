@@ -1,19 +1,18 @@
-# Snake class for handling snake movement, growth
-
 from geometry import Point, Direction
-import pygame
-import sys
-
-
 
 class Snake:
     length: int = None
     body: list = None
     direction: str = Direction.LEFT
     direction_changed: bool = False
+    circular_boundaries: bool = False
+    grid_size: int = None
 
-    def __init__(self, startingPoint = Point(0, 0), length = 3):
+    def __init__(self, grid_size, length = 3, circular_boundaries = False):
+        startingPoint = Point(grid_size // 2, grid_size // 2)
         self.body = [startingPoint]
+        self.grid_size = grid_size
+        self.circular_boundaries = circular_boundaries
         
         for i in range(1, length):
             self.body.append(Point(startingPoint.x + i, startingPoint.y))
@@ -28,6 +27,10 @@ class Snake:
             new_head = Point(new_head.x - 1, new_head.y)
         elif self.direction == Direction.RIGHT:
             new_head = Point(new_head.x + 1, new_head.y)
+
+        if self.circular_boundaries:
+            new_head = Point(new_head.x % self.grid_size, new_head.y % self.grid_size)
+
 
         self.body.insert(0, new_head)
         if not has_eaten:
@@ -44,3 +47,6 @@ class Snake:
 
     def get_snake_body(self):
         return self.body
+    
+    def has_direction_changed(self):
+        return self.direction_changed
