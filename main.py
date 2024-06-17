@@ -3,7 +3,7 @@ from ann import SnakeANN
 from genetic_algorithm import GeneticAlgorithm
 
 if __name__ == "__main__":
-    GA = GeneticAlgorithm(50, 0.1, 0.25)
+    GA = GeneticAlgorithm(50, 0.7, 0.6)
     GA.train(100)
 
     # model = SnakeANN()

@@ -13,17 +13,13 @@ class SnakeANN:
 
     def __init__(self):
         # create the model as described above
+        initializer = tf.keras.initializers.RandomNormal(mean=0., stddev=1.)
         self.model = tf.keras.models.Sequential([
-            tf.keras.layers.Dense(12, input_shape=(24,), activation='relu', kernel_initializer='custom_initializer'),
-            tf.keras.layers.Dense(4, activation='softmax', kernel_initializer='custom_initializer')
+            tf.keras.layers.Dense(12, input_shape=(24,), activation='relu', kernel_initializer=initializer),
+            tf.keras.layers.Dense(4, activation='softmax', kernel_initializer=initializer)
         ])
         self.model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 
-    def custom_initializer(shape, dtype=None):
-        # Define your desired range
-        minval = -1
-        maxval = 1
-        return tf.random.uniform(shape, minval=minval, maxval=maxval, dtype=dtype)
     def randomize(self):
         self.model.set_weights([np.random.rand(*w.shape) for w in self.model.get_weights()])
         return self
