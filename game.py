@@ -50,7 +50,10 @@ class Game:
         return self.snake
 
     def get_fruit(self):
-        return self.fruit   
+        return self.fruit  
+
+    def set_fruit_position(self, position):
+        self.fruit.point = position 
 
     def test_grid_boundaries(self):
         if self.circular_boundaries:

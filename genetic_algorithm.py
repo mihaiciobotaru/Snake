@@ -1,5 +1,6 @@
 # class for training ANN to play the game
 
+import random
 import time
 from ann import SnakeANN
 from app import GameApp
@@ -24,57 +25,79 @@ class GeneticAlgorithm:
         self.crossover_rate = crossover_rate
         self.population = [SnakeANN().randomize() for i in range(population_size)]
 
-    def get_fitness_of_individual(self, individual, results, index):
+    def play_game_in_parallel(self, app, results, index, model):
         app = GameApp(True, "ai")
-        app.set_ann_model(individual)
+        app.set_ann_model(model)
         score, moves = app.runGame()
-        fitness = 10 * moves + (2 ** score + (score ** 2.1) * 500) - ((score ** 1.2) * ((moves * 0.25)) ** 1.3)    
+        score -= 3
+        # if moves < 6:
+        #     print("Suspected bad model:")
+        #     print(app.initialFruitPosition)
+        #     print(score, moves)
+        #     self.save_model(model, f"./models/bad_model_{index}_{score}_{moves}_{app.initialFruitPosition.x}_{app.initialFruitPosition.y}.h5")
+        #     exit()
+        results[index] = (score, moves)
+
+    def get_fitness_of_individual(self, individual, results, index):
+        play_count = 5
+        results_individual = [(0, 0) for i in range(play_count)]
+        threads = []
+        for i in range(play_count):
+            thread = threading.Thread(target=self.play_game_in_parallel, args=(GameApp(True, "ai"), results_individual, i, individual))
+            thread.start()
+            threads.append(thread)
+
+        for i in range(play_count):
+            threads[i].join()
+
+
+        mean_moves = np.mean([result[1] for result in results_individual])
+        max_moves = np.max([result[1] for result in results_individual])
+        std_moves = np.std([result[1] for result in results_individual])
+
+        mean_score = np.mean([result[0] for result in results_individual])
+        max_score = np.max([result[0] for result in results_individual])
+        std_score = np.std([result[0] for result in results_individual])
+      
+        # fitness = \
+        #     mean_score ** 1.5 + max_score ** 10 - std_score * 5 + \
+        #     mean_moves ** 1.2 - (mean_score * 2 - mean_moves) ** 2 + \
+        #     max_moves * 10 - std_moves * 5
+
+        fitness = mean_moves + ( 2 ** mean_score + ((mean_score ** 2.1) * 500))\
+        - ( (mean_score ** 1.2) * ((0.25 * mean_moves) ** 1.3))
+        fitness = int(fitness)
         results[index] = fitness
+        individual.set_score(results_individual)
 
     def crossover(self, parent1, parent2):
         parent1_weights = parent1.get_weights()
         parent2_weights = parent2.get_weights()
-        parent1_flat_weights, parent1_original_shapes = self.weights_to_1d_array(parent1_weights)
-        parent2_flat_weights, parent2_original_shapes = self.weights_to_1d_array(parent2_weights)
-        # make the weights arrays 1d array with bits
 
-        parent1_weights_bits = [self.float32_to_bits_array(weight) for weight in parent1_flat_weights]
-        parent2_weights_bits = [self.float32_to_bits_array(weight) for weight in parent2_flat_weights]
+        parent1_weights, parent1_shapes = self.weights_to_1d_array(parent1_weights)
+        parent2_weights, parent2_shapes = self.weights_to_1d_array(parent2_weights)
+        
+        child1_weights = []
+        child2_weights = []
 
-        parent1_weights_bits = np.array(parent1_weights_bits)
-        parent2_weights_bits = np.array(parent2_weights_bits)
-        original_shape = parent1_weights_bits.shape
-
-        parent1_weights_bits = parent1_weights_bits.flatten()
-        parent2_weights_bits = parent2_weights_bits.flatten()
-
-        # crossover
-
-        lhs = np.random.randint(0, len(parent1_weights_bits))
-        rhs = np.random.randint(0, len(parent1_weights_bits))
-
-        if lhs > rhs:
-            lhs, rhs = rhs, lhs
-
-        child1_weights_bits = np.concatenate((parent1_weights_bits[:lhs], parent2_weights_bits[lhs:rhs], parent1_weights_bits[rhs:]))
-        child1_weights_bits = child1_weights_bits.reshape(original_shape)
-
-        child2_weights_bits = np.concatenate((parent2_weights_bits[:lhs], parent1_weights_bits[lhs:rhs], parent2_weights_bits[rhs:]))
-        child2_weights_bits = child2_weights_bits.reshape(original_shape)
-
-        child1_weights = [self.bits_array_to_float32(weight) for weight in child1_weights_bits]
-        child2_weights = [self.bits_array_to_float32(weight) for weight in child2_weights_bits]
-
+        for i in range(len(parent1_weights)):
+            if np.random.rand() < 0.5:
+                child1_weights.append(parent1_weights[i])
+                child2_weights.append(parent2_weights[i])
+            else:
+                child1_weights.append(parent2_weights[i])
+                child2_weights.append(parent1_weights[i])
+        
         child1_weights = np.array(child1_weights)
         child2_weights = np.array(child2_weights)
 
-        child1_weights = self.one_d_array_to_weights(child1_weights, parent1_original_shapes)
-        child2_weights = self.one_d_array_to_weights(child2_weights, parent2_original_shapes)
+        child1_weights = self.one_d_array_to_weights(child1_weights, parent1_shapes)
+        child2_weights = self.one_d_array_to_weights(child2_weights, parent2_shapes)
 
-        child1 = SnakeANN().set_weights(child1_weights)
-        child2 = SnakeANN().set_weights(child2_weights)
+        parent1.set_weights(child1_weights)
+        parent2.set_weights(child2_weights)
 
-        return child1, child2
+        return parent1, parent2
     
     def weights_to_1d_array(self, weights_list):
         # Flatten the weights to a one-dimensional array and store original shapes
@@ -109,13 +132,11 @@ class GeneticAlgorithm:
         one_d_weights, original_shapes = self.weights_to_1d_array(weights)
 
         for i in range(len(one_d_weights)):
-            bits_array = self.float32_to_bits_array(one_d_weights[i])
-            for j in range(len(bits_array)):
-                if np.random.rand() < self.mutation_rate:
-                    bits_array[j] = 1 - bits_array[j]
+            if np.random.rand() < self.mutation_rate:
+                # mutate the weight
+                one_d_weights[i] = random.uniform(-1, 1)
 
-            one_d_weights[i] = self.bits_array_to_float32(bits_array)
-
+        weights = np.array(one_d_weights)
         weights = self.one_d_array_to_weights(one_d_weights, original_shapes)
         individual.set_weights(weights)
         return individual
@@ -123,20 +144,17 @@ class GeneticAlgorithm:
     
     
     def select_individuals(self, fitnesses):
-        fitnesses = ((fitnesses - np.min(fitnesses)) * 2) / (np.max(fitnesses) - np.min(fitnesses) + 1) - 1
-        fitnesses = [1 / (1 + np.exp(-fitness)) for fitness in fitnesses]
-        total_fitness = sum(fitnesses)
-        probabilities = [fitness / total_fitness for fitness in fitnesses]
-
+        # higher fitness is better
         selected_individuals = []
         for i in range(self.population_size):
-            selected_individuals.append(np.random.choice(self.population, p=probabilities))
-
+            index = np.random.choice(range(self.population_size), p=fitnesses / np.sum(fitnesses))
+            selected_individuals.append(self.population[index])
+        
         return selected_individuals
     
+
+    
     def get_fitnesses(self):
-        #fitnesses = [self.get_fitness_of_individual(individual) for individual in self.population]
-        # use multiprocessing to speed up the process
         fitnesses = [0] * self.population_size
         threads = []
         for i in range(self.population_size):
@@ -155,9 +173,8 @@ class GeneticAlgorithm:
         # save best model
         best_individual = self.population[np.argmax(fitnesses)]
         self.save_model(best_individual, f"./models/best_model_gen_{gen_count}.h5")
-        print(f"Playing best model of generation {gen_count} with fitness {np.max(fitnesses)}")
-        play_thread = threading.Thread(target=self.play_model, args=(best_individual, gen_count))
-        play_thread.start()
+        print(f"Playing best model of generation {gen_count} with fitness {np.max(fitnesses)} and results {best_individual.results}")
+        self.play_model(best_individual, gen_count)
 
         new_population = self.select_individuals(fitnesses)
         crossover_rate = self.crossover_rate
@@ -206,6 +223,7 @@ class GeneticAlgorithm:
         self.playing_model = True
         app = GameApp(False, "ai", f" Generation {generation}")
         app.set_ann_model(model)
+        app.setGameSpeed(8)
         score, moves = app.runGame()
         print("Generation", generation, "Score: ", score, "Moves: ", moves)
         self.playing_model = False
