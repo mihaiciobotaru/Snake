@@ -7,6 +7,7 @@ class Snake:
     direction_changed: bool = False
     circular_boundaries: bool = False
     grid_size: int = None
+    move_count: int = 0
 
     def __init__(self, grid_size, length = 3, circular_boundaries = False):
         startingPoint = Point(grid_size // 2, grid_size // 2)
@@ -35,6 +36,7 @@ class Snake:
         self.body.insert(0, new_head)
         if not has_eaten:
             self.body.pop()
+        self.move_count += 1
 
     def set_direction(self, direction):
         if abs(self.direction - direction) == 2 or self.direction_changed:
