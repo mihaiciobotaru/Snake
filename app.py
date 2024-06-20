@@ -2,7 +2,7 @@ import os
 import pygame
 import time
 from game import Game
-from geometry import Direction, Point
+from geometry import Direction, Point, INFINITY
 
 
 
@@ -13,6 +13,7 @@ class GameApp:
     WINDOW_SIZE = 500
     GRID_SIZE = 20
     SCORE_TABLE_OFFSET = WINDOW_SIZE // GRID_SIZE 
+    NEURAL_NETWORK_VISUALIZER_OFFSET = 300
 
     # Set up the game rules
     GAME_SPEED = 8
@@ -34,7 +35,7 @@ class GameApp:
     screen = None
     square_size = WINDOW_SIZE // GRID_SIZE
     playMode = None
-    ANN_model = None
+    AI_model = None
     specialText = ""
     initialFruitPosition = None
 
@@ -50,7 +51,7 @@ class GameApp:
         if not self.RUN_HEADLESS:
             pygame.init()
             self.screen = pygame.display.set_mode(
-                (self.WINDOW_SIZE, self.SCORE_TABLE_OFFSET + self.WINDOW_SIZE)
+                (self.WINDOW_SIZE + self.NEURAL_NETWORK_VISUALIZER_OFFSET, self.SCORE_TABLE_OFFSET + self.WINDOW_SIZE)
             )
             pygame.display.set_caption("Snake Game")
 
@@ -61,8 +62,8 @@ class GameApp:
         if self.playMode == "human" and self.RUN_HEADLESS:
             raise ValueError("Cannot run human mode in headless mode")
 
-    def set_ann_model(self, model):
-        self.ANN_model = model
+    def set_ai_model(self, model):
+        self.AI_model = model
 
     def set_initial_fruit_position(self, position):
         # make point out of tuple
@@ -80,25 +81,25 @@ class GameApp:
         fruit = self.game.get_fruit().point
         snake_head = snake.get_snake_body()[0]
         input = []
+        left = []
+        right = []
+        top = []
+        bottom = []
         
         # get the distance to the fruit in all 4 directions
-        input.append(snake_head.distance_on_left(fruit))
-        input.append(snake_head.distance_on_right(fruit))
-        input.append(snake_head.distance_on_top(fruit))
-        input.append(snake_head.distance_on_bottom(fruit))
-
-        for i in range(4):
-            if input[i] == 999:
-                input[i] = -999
+        left.append(snake_head.distance_on_left(fruit))
+        right.append(snake_head.distance_on_right(fruit))
+        top.append(snake_head.distance_on_top(fruit))
+        bottom.append(snake_head.distance_on_bottom(fruit))
 
         # get the distance to the wall on all 4 directions
-        input.append(snake_head.x)
-        input.append(snake_head.y)
-        input.append(self.GRID_SIZE - snake_head.x)
-        input.append(self.GRID_SIZE - snake_head.y)
+        right.append(self.GRID_SIZE - snake_head.x)
+        left.append(snake_head.x)
+        top.append(snake_head.y)
+        bottom.append(self.GRID_SIZE - snake_head.y)
         
         # get the min distance to itself in all 8 directions 
-        min_list = [999, 999, 999, 999]#, 999, 999, 999, 999]
+        min_list = [INFINITY, INFINITY, INFINITY, INFINITY]#, 999, 999, 999, 999]
         for i in range(1, len(snake.get_snake_body())):
             body_part = snake.get_snake_body()[i]
             min_list[0] = min(min_list[0], snake_head.distance_on_left(body_part))
@@ -110,7 +111,17 @@ class GameApp:
             # min_list[6] = min(min_list[6], snake_head.distance_on_lower_left_diagonal(body_part))
             # min_list[7] = min(min_list[7], snake_head.distance_on_lower_right_diagonal(body_part))
         
-        input.extend(min_list)
+        left.append(min_list[0])
+        right.append(min_list[1])
+        top.append(min_list[2])
+        bottom.append(min_list[3])
+        input.extend(left)
+        input.extend(right)
+        input.extend(top)
+        input.extend(bottom)
+        input = [abs(x) if x == -INFINITY else x for x in input]
+
+        # add everything in the right order
         return input
 
     def runGame(self):
@@ -154,7 +165,7 @@ class GameApp:
                 if len(keys) > 0:
                     self.game.get_snake().set_direction(list(keys.keys())[0])
 
-            elif self.playMode == "ai":
+            elif self.playMode in ["ann", "q_learning"]:
                 if not self.RUN_HEADLESS:
                     for event in pygame.event.get():
                         quit = self.eventHandlingDisplay(event)
@@ -163,16 +174,22 @@ class GameApp:
                 if not self.game.get_snake().has_direction_changed():
                     input = self.get_ann_input()
                     if input is not None:
-                        output = self.ANN_model.predict(input)
+                        snake_head = self.game.get_snake().get_snake_body()[0]
+                        print("snake head when firing: ", snake_head.x, snake_head.y)
+                        output = self.AI_model.predict(input)
                         self.game.get_snake().set_direction(output)
-                
+                        self.ann_fired = True
+
             should_move = False
             if not self.RUN_HEADLESS:
                 self.screen.fill(self.BLACK)
                 self.drawScore()
+                self.drawNetwork()
                 self.drawFruit()
                 self.drawSnake()
                 self.drawGrid()
+
+               
 
                             
                 # handle game speed
@@ -183,9 +200,30 @@ class GameApp:
             if self.RUN_HEADLESS:
                 should_move = True
 
-            game_over = not self.game.update(should_move)    
             if game_over and self.QUIT_ON_GAME_OVER:
                 running = False
+            game_over, has_eaten = self.game.update(should_move) 
+            if should_move == False:
+                result = self.game.test_if_next_move_is_valid()
+                if not result:
+                    game_over = True
+            if self.playMode == "q_learning":
+                if has_eaten:
+                    reward = 10
+                else:
+                    if idle_moves > 30:
+                        reward = -0.1
+                    else:
+                        reward = 0.1
+                if game_over:
+                    reward = -10
+                next_state = self.get_ann_input()
+                if self.ann_fired or game_over:
+                    print("game_over: ", game_over, "has_eaten: ", has_eaten)
+                    snake_head = self.game.get_snake().get_snake_body()[0]
+                    print("snake head when learning: ", snake_head.x, snake_head.y)
+                    self.AI_model.learn(reward, game_over, next_state)  
+                    self.ann_fired = False
             
             
             if not self.RUN_HEADLESS:
@@ -214,9 +252,19 @@ class GameApp:
             return False
         elif event.type == pygame.WINDOWFOCUSGAINED:
             pygame.display.set_mode(
-                (self.WINDOW_SIZE, self.SCORE_TABLE_OFFSET + self.WINDOW_SIZE)
+                (self.WINDOW_SIZE + self.NEURAL_NETWORK_VISUALIZER_OFFSET, self.SCORE_TABLE_OFFSET + self.WINDOW_SIZE)
             )
             return False
+        
+    def drawNetwork(self):
+        if not self.RUN_HEADLESS and self.playMode == "q_learning":
+            if self.ann_fired:
+                self.update_network = True
+            else :
+                self.update_network = False
+            self.AI_model.visualize_network(self.screen, self.update_network)
+            # wait 10 seconds
+            #time.sleep(10)
         
     def drawScore(self):
         font = pygame.font.Font(None, 36)

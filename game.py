@@ -33,18 +33,32 @@ class Game:
         self.circular_boundaries = circular_boundaries
 
     def update(self, should_move = False):
+        head = self.snake.get_snake_body()[0]
+        print("snake before moving" ,head.x, head.y)
         self.score = len(self.snake.get_snake_body())
         if self.snake.get_snake_body()[0] == self.fruit.point:
             self.has_eaten = True
             self.fruit.generate_fruit(self.snake.get_snake_body(), self.grid_size)
         if should_move:
             self.snake.move(self.has_eaten)
+            head = self.snake.get_snake_body()[0]
+            print("snake after moving" ,head.x, head.y)
             self.has_eaten = False
             self.set_direction_changed(False)
         
         if self.test_game_over():
-            return False
-        return True
+            return True, False
+        return False, self.has_eaten
+    
+    def test_if_next_move_is_valid(self):
+        snake_body_copy = self.snake.get_snake_body()
+        self.snake.move(False)
+        result = self.test_game_over()
+        self.snake.body = snake_body_copy
+        self.snake.move_count -= 1
+        return not result
+
+
 
     def get_snake(self):
         return self.snake

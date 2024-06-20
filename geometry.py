@@ -1,4 +1,4 @@
-INFINITY = 999
+INFINITY = 50
 
 class Point:
     x: int = None
@@ -39,31 +39,32 @@ class Point:
     
     # distance from the left of the point to the other point
     def distance_on_left(self, other):
-        return other.x - self.x if self.are_on_left(other) else -INFINITY
-    
+        return self.x - other.x if self.are_on_left(other) else -INFINITY
+
     # distance from the right of the point to the other point
     def distance_on_right(self, other):
-        return self.x - other.x if self.are_on_right(other) else -INFINITY
+        return other.x - self.x if self.are_on_right(other) else -INFINITY
+
     
     # distance from the top of the point to the other point
     def distance_on_top(self, other):
-        return other.y - self.y if self.are_on_top(other) else -INFINITY
-    
+        return self.y - other.y if self.are_on_top(other) else -INFINITY
+
     # distance from the bottom of the point to the other point
     def distance_on_bottom(self, other):
-        return self.y - other.y if self.are_on_bottom(other) else -INFINITY
+        return other.y - self.y if self.are_on_bottom(other) else -INFINITY
     
     def are_on_left(self, other):
-        return self.x < other.x
-    
-    def are_on_right(self, other):
         return self.x > other.x
     
+    def are_on_right(self, other):
+        return self.x < other.x
+    
     def are_on_top(self, other):
-        return self.y < other.y
+        return self.y > other.y
     
     def are_on_bottom(self, other):
-        return self.y > other.y
+        return self.y < other.y
     
     def are_on_upper_left_diagonal(self, other):
         return self.x - other.x == self.y - other.y
@@ -77,10 +78,6 @@ class Point:
     def are_on_lower_right_diagonal(self, other):
         return other.x - self.x == other.y - self.y
   
-    
-    
-
-    
 
 class Direction:
     UP = 2

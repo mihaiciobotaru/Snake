@@ -39,7 +39,10 @@ class Snake:
         self.move_count += 1
 
     def set_direction(self, direction):
-        if abs(self.direction - direction) == 2 or self.direction_changed:
+        # if abs(self.direction - direction) == 2 or self.direction_changed:
+        #     return
+
+        if self.direction_changed:
             return
         self.direction = direction
         self.direction_changed = True
